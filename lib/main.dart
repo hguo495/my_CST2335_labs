@@ -1,92 +1,145 @@
 import 'package:flutter/material.dart';
 
 void main() {
-  runApp(const MyApp());
+  runApp(MyApp());
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
-
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-
-
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      debugShowCheckedModeBanner: true,
+      title: 'Flutter Secure Login',
+      theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+        useMaterial3: true,
+      ),
+      home: ListPage(),
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  final String title;
-
+class ListPage extends StatefulWidget {
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  _ListPageState createState() => _ListPageState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  final TextEditingController _loginController = TextEditingController();
-  final TextEditingController _passwordController = TextEditingController();
+class _ListPageState extends State<ListPage> {
+  final List<Map<String, dynamic>> _items = [];
+  final TextEditingController _itemController = TextEditingController();
+  final TextEditingController _quantityController = TextEditingController();
 
-  // State variable for the image source
-  String imageSource = 'images/question-mark.png';
+  void _addItem() {
+    final String itemName = _itemController.text.trim();
+    final String quantity = _quantityController.text.trim();
 
-  void _handleLogin() {
-    String password = _passwordController.text;
+    if (itemName.isNotEmpty && quantity.isNotEmpty) {
+      setState(() {
+        _items.add({'name': itemName, 'quantity': quantity});
+        _itemController.clear();
+        _quantityController.clear();
+      });
+    }
+  }
 
-    setState(() {
-      if (password == "QWERTY123") {
-
-        imageSource = 'images/idea.png';
-      } else {
-        imageSource = 'images/stop.png';
-      }
-    });
+  void _removeItem(int index) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text("Remove Item"),
+        content: Text("Are you sure you want to delete this item?"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text("No"),
+          ),
+          TextButton(
+            onPressed: () {
+              setState(() {
+                _items.removeAt(index);
+              });
+              Navigator.pop(context);
+            },
+            child: Text("Yes"),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.title),
+               backgroundColor: Colors.deepPurple,
+        foregroundColor: Colors.white,
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            Image.asset(
-              imageSource,
-              width: 300,
-              height: 300,
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: Column(
+              children: [
+
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _itemController,
+                        decoration: InputDecoration(
+                          hintText: "Enter item name",
+                          labelText: "Item Name",
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                    ),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: TextField(
+                        controller: _quantityController,
+                        keyboardType: TextInputType.number,
+                        decoration: InputDecoration(
+                          hintText: "Enter quantity",
+                          labelText: "Quantity",
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                    ),
+                    SizedBox(width: 8),
+                    ElevatedButton(
+                      onPressed: _addItem,
+                      child: Text("Click here"),
+                    ),
+                  ],
+                ),
+              ],
             ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _loginController,
-              decoration: const InputDecoration(
-                labelText: "Login name",
-                border: OutlineInputBorder(),
-              ),
+          ),
+          Expanded(
+            child: _items.isEmpty
+                ? Center(child: Text("There are no items in the list"))
+                : ListView.builder(
+              itemCount: _items.length,
+              itemBuilder: (context, index) {
+                return GestureDetector(
+                  onLongPress: () => _removeItem(index),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      children: [
+                        Text("${index + 1}: ${_items[index]['name']}", style: TextStyle()),
+                        Text("quantity: ${_items[index]['quantity']}", style: TextStyle(color: Colors.grey[700])),
+                      ],
+                    ),
+                  ),
+                );
+              },
             ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _passwordController,
-              obscureText: true,
-              decoration: const InputDecoration(
-                labelText: "Password",
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: _handleLogin,
-              child: const Text("Login"),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 }
+
