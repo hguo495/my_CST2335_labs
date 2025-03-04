@@ -1,149 +1,247 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'ProfilePage.dart';
+import 'database.dart';
+import 'todo_item.dart';
+import 'package:floor/floor.dart';
 
-void main() {
-  runApp(const MyApp());
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  final database = await $FloorAppDatabase.databaseBuilder('lab7.db').build();
+  runApp(MyApp(database));
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  final AppDatabase database;
+
+  MyApp(this.database);
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Flutter Demo',
+      title: 'Shopping List',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
         useMaterial3: true,
       ),
-      home: const MyHomePage(title: 'Flutter Secure Login'),
+      home: ListPage(database: database),
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-  final String title;
+class ListPage extends StatefulWidget {
+  final AppDatabase database;
+
+  ListPage({required this.database});
 
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  _ListPageState createState() => _ListPageState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  final TextEditingController _loginNameController = TextEditingController();
-  final TextEditingController _passwordController = TextEditingController();
-  final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
-
-  String imageSource = 'images/question-mark.png';
+class _ListPageState extends State<ListPage> {
+  late List<TodoItem> _items = [];
+  TodoItem? _selectedItem;
+  final TextEditingController _itemController = TextEditingController();
+  final TextEditingController _quantityController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    _loadStoredCredentials();
+    _loadItems();
   }
 
-  Future<void> _loadStoredCredentials() async {
-    String? savedUsername = await _secureStorage.read(key: 'username');
-    String? savedPassword = await _secureStorage.read(key: 'password');
+  Future<void> _loadItems() async {
+    final items = await widget.database.todoDao.getAllItems();
+    setState(() {
+      _items = items;
+    });
+  }
 
-    if (savedUsername != null && savedPassword != null) {
-      _loginNameController.text = savedUsername;
-      _passwordController.text = savedPassword;
+  Future<void> _addItem() async {
+    final String itemName = _itemController.text.trim();
+    final String quantityText = _quantityController.text.trim();
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Previous login loaded'),
-          action: SnackBarAction(
-            label: 'Undo',
-            onPressed: () {
-              setState(() {
-                _loginNameController.clear();
-                _passwordController.clear();
-              });
-            },
+    if (itemName.isNotEmpty && quantityText.isNotEmpty) {
+      final int quantity = int.tryParse(quantityText) ?? 1; // Default to 1 if parsing fails
+      final newItem = TodoItem(TodoItem.ID++,'$itemName (Qty: $quantity)');
+      await widget.database.todoDao.insertItem(newItem);
+      _itemController.clear();
+      _quantityController.clear();
+      _loadItems();
+    }
+  }
+
+  Future<void> _deleteItem(TodoItem item) async {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text("Delete Item"),
+        content: Text("Are you sure you want to delete this item?"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text("No"),
           ),
-        ),
-      );
-    }
-  }
-
-  Future<void> _handleLogin() async {
-    String username = _loginNameController.text;
-    String password = _passwordController.text;
-
-    if (username.isNotEmpty && password.isNotEmpty) {
-      // Save credentials automatically if needed
-      await _secureStorage.write(key: 'username', value: username);
-      await _secureStorage.write(key: 'password', value: password);
-
-      // Show welcome message
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Welcome Back!")),
-      );
-
-      // Navigate to ProfilePage
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => ProfilePage(username: username,),
-        ),
-      );
-    } else {
-      // Show error if fields are empty
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Please enter a username and password.")),
-      );
-    }
+          TextButton(
+            onPressed: () async {
+              await widget.database.todoDao.deleteItem(item);
+              Navigator.pop(context);
+              setState(() {
+                _selectedItem = null;
+              });
+              _loadItems();
+            },
+            child: Text("Yes"),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        title: Text(widget.title),
-      ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            TextField(
-              controller: _loginNameController,
-              decoration: const InputDecoration(
-                hintText: "Please enter your username",
-                labelText: "Login",
-                border: OutlineInputBorder(),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        bool isWideScreen = constraints.maxWidth > 600;
+
+        return Scaffold(
+          appBar: AppBar(
+            title: Text("Shopping List"),
+            backgroundColor: Colors.deepPurple,
+            foregroundColor: Colors.white,
+          ),
+          body: isWideScreen
+              ? Row(
+            children: [
+              Expanded(child: _buildItemList()),
+              VerticalDivider(),
+              Expanded(
+                child: _selectedItem != null
+                    ? DetailsPage(
+                  item: _selectedItem!,
+                  onDelete: _deleteItem,
+                  onClose: () => setState(() => _selectedItem = null),
+                )
+                    : Center(child: Text("Select an item to view details")),
               ),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _passwordController,
-              obscureText: true,
-              decoration: const InputDecoration(
-                hintText: "Please enter your password",
-                labelText: "Password",
-                border: OutlineInputBorder(),
+            ],
+          )
+              : Column(
+            children: [
+              Expanded(flex: 2, child: _buildItemList()),
+              Divider(),
+              Expanded(
+                flex: 3,
+                child: _selectedItem != null
+                    ? DetailsPage(
+                  item: _selectedItem!,
+                  onDelete: _deleteItem,
+                  onClose: () => setState(() => _selectedItem = null),
+                )
+                    : Center(child: Text("Select an item to view details")),
               ),
-            ),
-            const SizedBox(height: 10),
-            ElevatedButton(
-              onPressed: _handleLogin,
-              style: ElevatedButton.styleFrom(
-                foregroundColor: Colors.blue,
-                textStyle: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildItemList() {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _itemController,
+                  decoration: InputDecoration(
+                    hintText: "Enter item name",
+                    labelText: "Item Name",
+                    border: OutlineInputBorder(),
+                  ),
+                ),
               ),
-              child: const Text("Login"),
-            ),
-            Image.asset(
-              imageSource,
-              height: 200,
-              width: 200,
-            ),
-          ],
+              SizedBox(width: 8),
+              Expanded(
+                child: TextField(
+                  controller: _quantityController,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    hintText: "Enter quantity",
+                    labelText: "Quantity",
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ),
+              SizedBox(width: 8),
+              ElevatedButton(
+                onPressed: _addItem,
+                child: Text("Add"),
+              ),
+            ],
+          ),
         ),
+        Expanded(
+          child: ListView.builder(
+            itemCount: _items.length,
+            itemBuilder: (context, index) {
+              return ListTile(
+                title: Text(_items[index].todoItem),
+                onTap: () => setState(() => _selectedItem = _items[index]),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class DetailsPage extends StatelessWidget {
+  final TodoItem item;
+  final VoidCallback onClose;
+  final Function(TodoItem) onDelete;
+
+  DetailsPage({required this.item, required this.onDelete, required this.onClose});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text("Item: ${item.todoItem}", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+          SizedBox(height: 10),
+          Text("Quantity: ${_extractQuantity(item.todoItem)}", style: TextStyle(fontSize: 18)),
+          Text("Database ID: ${item.id}", style: TextStyle(fontSize: 16)),
+          SizedBox(height: 20),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              ElevatedButton(
+                onPressed: () => onDelete(item),
+                child: Text("Delete"),
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              ),
+              SizedBox(width: 10),
+              ElevatedButton(
+                onPressed: onClose,
+                child: Text("Close"),
+              ),
+            ],
+          ),
+        ],
       ),
     );
+  }
+
+  // Extract quantity from item.todoItem (formatted as "Item (Qty: X)")
+  String _extractQuantity(String itemText) {
+    final match = RegExp(r'\(Qty: (\d+)\)').firstMatch(itemText);
+    return match != null ? match.group(1)! : "Unknown";
   }
 }
