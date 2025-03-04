@@ -46,7 +46,7 @@ class _ListPageState extends State<ListPage> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text("Remove Item"),
+        title: Text("Delete Item"),
         content: Text("Are you sure you want to delete this item?"),
         actions: [
           TextButton(
